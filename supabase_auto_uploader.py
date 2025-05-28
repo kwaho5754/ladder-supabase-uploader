@@ -1,73 +1,47 @@
 import requests
-import time
+import os
+from supabase import create_client, Client
 
-# ✅ Supabase 정보
-SUPABASE_URL = "https://kfieqgyfuvvrnzawaffr.supabase.co"
-SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmaWVxZ3lmdXZ2cm56YXdhZmZyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODM3NTY5MSwiZXhwIjoyMDYzOTUxNjkxfQ.nXefrAvDEsBczHI5MEwWVZnCmW3B_B-ISxoftQu4NO8"
+# Supabase 환경변수
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_API_KEY = os.environ.get("SUPABASE_API_KEY")
 
-# ✅ Supabase에 회차 삽입
-def insert_ladder(row):
-    headers = {
-        "apikey": SUPABASE_API_KEY,
-        "Authorization": f"Bearer {SUPABASE_API_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
+# Supabase 클라이언트 초기화
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
-    payload = {
-        "회차": row["round"],
-        "start_point": row["start"],
-        "line_count": row["line"],
-        "odd_even": row["oe"]
-    }
+# JSON 데이터 주소
+json_url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
 
-    res = requests.post(
-        f"{SUPABASE_URL}/rest/v1/ladder",
-        headers=headers,
-        json=payload
-    )
+try:
+    # 전체 288개 중 가장 최신 회차 1개만 가져오기
+    response = requests.get(json_url)
+    response.raise_for_status()
+    data = response.json()
+    latest = data[0]  # 최신 회차는 항상 맨 앞
 
-    if res.status_code == 201:
-        print(f"✅ 회차 {row['round']} 저장됨")
-    elif res.status_code == 409:
-        print(f"⏭ 회차 {row['round']} 이미 있음 (중복 생략)")
+    # 필요한 필드 추출
+    reg_date = latest["reg_date"]
+    date_round = int(latest["date_round"])
+    start_point = latest["start_point"]
+    line_count = latest["line_count"]
+    odd_even = latest["odd_even"]
+
+    # Supabase에 동일 회차가 이미 존재하는지 확인
+    result = supabase.table("ladder").select("date_round").eq("date_round", date_round).execute()
+
+    if len(result.data) == 0:
+        # 존재하지 않으면 삽입
+        insert_data = {
+            "reg_date": reg_date,
+            "date_round": date_round,
+            "start_point": start_point,
+            "line_count": line_count,
+            "odd_even": odd_even
+        }
+        supabase.table("ladder").insert(insert_data).execute()
+        print(f"✅ 회차 {date_round} 저장됨")
     else:
-        print(f"❌ 저장 오류: {res.status_code} - {res.text}")
+        print(f"⏩ 회차 {date_round} 이미 있음 (중복 생략)")
 
-# ✅ 최신 회차 1줄 가져오기 (필드명 정확히 반영)
-def fetch_latest_row():
-    url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
-    try:
-        res = requests.get(url)
-        if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                row = data[0]
-                if all(k in row for k in ["date_round", "start_point", "line_count", "odd_even"]):
-                    return {
-                        "round": int(row["date_round"]),
-                        "start": row["start_point"],
-                        "line": int(row["line_count"]),
-                        "oe": row["odd_even"]
-                    }
-                else:
-                    print("⚠ 일부 필드 누락:", row)
-            else:
-                print("⚠ JSON 응답 비어 있음")
-        else:
-            print(f"❌ 요청 실패: {res.status_code}")
-    except Exception as e:
-        print(f"❌ 요청 예외: {e}")
-    return None
-
-# ✅ 5분마다 자동 실행 루프
-def run_auto_upload():
-    while True:
-        row = fetch_latest_row()
-        if row:
-            insert_ladder(row)
-        time.sleep(300)  # 5분 간격
-
-# ✅ 실행 시작
-if __name__ == "__main__":
-    run_auto_upload()
+except Exception as e:
+    print(f"❌ 예외 발생: {e}")
