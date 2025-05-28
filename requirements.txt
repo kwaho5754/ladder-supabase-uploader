@@ -1,2 +1,3 @@
 requests
 python-dotenv   # (선택) .env로 키 관리하고 싶을 경우
+supabase
