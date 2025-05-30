@@ -4,35 +4,47 @@ from supabase import create_client
 from datetime import datetime
 import os
 
+# Supabase 연결
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_API_KEY = os.environ.get("SUPABASE_API_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 def run_uploader():
     try:
+        # 외부 JSON에서 최근 결과 불러오기
         url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
         res = requests.get(url)
         res.raise_for_status()
         data = res.json()[0]
 
+        # 새로 저장할 row 구성
         new_row = {
-            "reg_date": data["reg_date"],  # ✅ 수정된 부분
+            "reg_date": data["reg_date"],
             "date_round": int(data["date_round"]),
             "start_point": data["start_point"],
             "line_count": str(data["line_count"]),
             "odd_even": data["odd_even"]
         }
 
-        exist = supabase.table("ladder").select("date_round").eq("date_round", new_row["date_round"]).execute()
+        # ✅ 중복 체크 기준을 reg_date + date_round로 변경
+        exist = (
+            supabase.table("ladder")
+            .select("id")
+            .eq("reg_date", new_row["reg_date"])
+            .eq("date_round", new_row["date_round"])
+            .execute()
+        )
+
         if exist.data:
-            print(f"❌ {datetime.now()} - 회차 {new_row['date_round']} 이미 있음")
+            print(f"❌ {datetime.now()} - {new_row['reg_date']} 회차 {new_row['date_round']} 이미 있음")
         else:
             supabase.table("ladder").insert(new_row).execute()
-            print(f"✅ {datetime.now()} - 회차 {new_row['date_round']} 저장 완료")
+            print(f"✅ {datetime.now()} - {new_row['reg_date']} 회차 {new_row['date_round']} 저장 완료")
 
     except Exception as e:
         print(f"❌ {datetime.now()} - 오류 발생: {e}")
 
+# 60초마다 실행
 if __name__ == "__main__":
     while True:
         run_uploader()
