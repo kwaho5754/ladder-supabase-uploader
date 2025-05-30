@@ -4,20 +4,20 @@ from supabase import create_client
 from datetime import datetime
 import os
 
-# Supabase 연결
+# ✅ Supabase 연결 설정
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_API_KEY = os.environ.get("SUPABASE_API_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 def run_uploader():
     try:
-        # 외부 JSON에서 최근 결과 불러오기
+        # ✅ 최신 회차 JSON 불러오기
         url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
         res = requests.get(url)
         res.raise_for_status()
         data = res.json()[0]
 
-        # 새로 저장할 row 구성
+        # ✅ 저장할 row 생성
         new_row = {
             "reg_date": data["reg_date"],
             "date_round": int(data["date_round"]),
@@ -26,10 +26,10 @@ def run_uploader():
             "odd_even": data["odd_even"]
         }
 
-        # ✅ 중복 체크 기준을 reg_date + date_round로 변경
+        # ✅ 중복 검사: reg_date + date_round 기준
         exist = (
             supabase.table("ladder")
-            .select("id")
+            .select("*")
             .eq("reg_date", new_row["reg_date"])
             .eq("date_round", new_row["date_round"])
             .execute()
@@ -44,7 +44,7 @@ def run_uploader():
     except Exception as e:
         print(f"❌ {datetime.now()} - 오류 발생: {e}")
 
-# 60초마다 실행
+# ✅ 60초마다 자동 실행
 if __name__ == "__main__":
     while True:
         run_uploader()
